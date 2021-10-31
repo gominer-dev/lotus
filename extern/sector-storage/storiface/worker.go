@@ -24,6 +24,8 @@ type WorkerInfo struct {
 	// Default should be false (zero value, i.e. resources taken into account).
 	IgnoreResources bool
 	Resources       WorkerResources
+
+	MaxAllowAddPiece int
 }
 
 type WorkerResources struct {

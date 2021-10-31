@@ -38,6 +38,8 @@ type WorkerConfig struct {
 	// worker regardless of its currently available resources. Used in testing
 	// with the local worker.
 	IgnoreResourceFiltering bool
+
+	MaxAllowAddPiece int
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -52,7 +54,8 @@ type LocalWorker struct {
 	noSwap     bool
 
 	// see equivalent field on WorkerConfig.
-	ignoreResources bool
+	ignoreResources  bool
+	maxAllowAddPiece int
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -79,12 +82,13 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		ct: &workerCallTracker{
 			st: cst,
 		},
-		acceptTasks:     acceptTasks,
-		executor:        executor,
-		noSwap:          wcfg.NoSwap,
-		ignoreResources: wcfg.IgnoreResourceFiltering,
-		session:         uuid.New(),
-		closing:         make(chan struct{}),
+		acceptTasks:      acceptTasks,
+		executor:         executor,
+		noSwap:           wcfg.NoSwap,
+		ignoreResources:  wcfg.IgnoreResourceFiltering,
+		maxAllowAddPiece: wcfg.MaxAllowAddPiece,
+		session:          uuid.New(),
+		closing:          make(chan struct{}),
 	}
 
 	if w.executor == nil {
@@ -310,8 +314,14 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
+	l.maxAllowAddPiece = l.maxAllowAddPiece - 1
+
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.AddPiece(ctx, sector, epcs, sz, r)
+		pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
+		if err != nil {
+			l.maxAllowAddPiece = l.maxAllowAddPiece + 1
+		}
+		return pieceInfo, err
 	})
 }
 
@@ -344,8 +354,11 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 		if err != nil {
 			return nil, err
 		}
+		preCommit1Out, err := sb.SealPreCommit1(ctx, sector, ticket, pieces)
 
-		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
+		l.maxAllowAddPiece = l.maxAllowAddPiece + 1
+
+		return preCommit1Out, err
 	})
 }
 
@@ -509,8 +522,9 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:        hostname,
-		IgnoreResources: l.ignoreResources,
+		Hostname:         hostname,
+		IgnoreResources:  l.ignoreResources,
+		MaxAllowAddPiece: l.maxAllowAddPiece,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,

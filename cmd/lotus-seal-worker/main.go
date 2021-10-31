@@ -177,6 +177,11 @@ var runCmd = &cli.Command{
 			Usage: "enables task distribution to happen on this worker regardless of its currently available resources",
 			Value: true,
 		},
+		&cli.IntFlag{
+			Name:  "max-allow-addpiece",
+			Usage: "prepare add piece quantity in advance",
+			Value: 2,
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -405,6 +410,7 @@ var runCmd = &cli.Command{
 				TaskTypes:               taskTypes,
 				NoSwap:                  cctx.Bool("no-swap"),
 				IgnoreResourceFiltering: cctx.Bool("ignore-resource"),
+				MaxAllowAddPiece:        cctx.Int("max-allow-addpiece"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,

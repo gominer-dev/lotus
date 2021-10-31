@@ -394,6 +394,11 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
+				if task.taskType == sealtasks.TTAddPiece && worker.info.MaxAllowAddPiece == 0 {
+					log.Debugw("skipping max allow addpiece", "worker", worker.info.Hostname)
+					continue
+				}
+
 				// TODO: allow bigger windows
 				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
 					continue
