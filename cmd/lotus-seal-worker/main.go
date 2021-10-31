@@ -172,6 +172,11 @@ var runCmd = &cli.Command{
 			Usage: "used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function",
 			Value: "30m",
 		},
+		&cli.BoolFlag{
+			Name:  "ignore-resource",
+			Usage: "enables task distribution to happen on this worker regardless of its currently available resources",
+			Value: true,
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -397,8 +402,9 @@ var runCmd = &cli.Command{
 
 		workerApi := &worker{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
-				TaskTypes: taskTypes,
-				NoSwap:    cctx.Bool("no-swap"),
+				TaskTypes:               taskTypes,
+				NoSwap:                  cctx.Bool("no-swap"),
+				IgnoreResourceFiltering: cctx.Bool("ignore-resource"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,
