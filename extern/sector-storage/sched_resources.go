@@ -55,12 +55,21 @@ func (a *activeResources) free(wr storiface.WorkerResources, r Resources) {
 // canHandleRequest evaluates if the worker has enough available resources to
 // handle the request.
 func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, caller string, info storiface.WorkerInfo) bool {
+
+	res := info.Resources
+
+	if len(res.GPUs) > 0 && needRes.CanGPU {
+		if a.gpuUsed {
+			log.Debugf("sched: not scheduling on worker %s for %s; GPU in use", wid, caller)
+			return false
+		}
+	}
+
 	if info.IgnoreResources {
 		// shortcircuit; if this worker is ignoring resources, it can always handle the request.
 		return true
 	}
 
-	res := info.Resources
 	// TODO: dedupe needRes.BaseMinMemory per task type (don't add if that task is already running)
 	minNeedMem := res.MemReserved + a.memUsedMin + needRes.MinMemory + needRes.BaseMinMemory
 	if minNeedMem > res.MemPhysical {
@@ -78,13 +87,6 @@ func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, call
 	if a.cpuUse+needRes.Threads(res.CPUs) > res.CPUs {
 		log.Debugf("sched: not scheduling on worker %s for %s; not enough threads, need %d, %d in use, target %d", wid, caller, needRes.Threads(res.CPUs), a.cpuUse, res.CPUs)
 		return false
-	}
-
-	if len(res.GPUs) > 0 && needRes.CanGPU {
-		if a.gpuUsed {
-			log.Debugf("sched: not scheduling on worker %s for %s; GPU in use", wid, caller)
-			return false
-		}
 	}
 
 	return true
