@@ -178,14 +178,14 @@ var runCmd = &cli.Command{
 			Value: true,
 		},
 		&cli.IntFlag{
-			Name:  "max-allow-addpiece",
+			Name:  "max-task",
 			Usage: "prepare add piece quantity in advance",
-			Value: 2,
+			Value: 15,
 		},
-		&cli.BoolFlag{
-			Name:  "auto-pledge",
-			Usage: "enables task for auto",
-			Value: true,
+		&cli.DurationFlag{
+			Name:  "task-interval-time",
+			Usage: "add task interval time",
+			Value: 10,
 		},
 	},
 	Before: func(cctx *cli.Context) error {
@@ -415,7 +415,7 @@ var runCmd = &cli.Command{
 				TaskTypes:               taskTypes,
 				NoSwap:                  cctx.Bool("no-swap"),
 				IgnoreResourceFiltering: cctx.Bool("ignore-resource"),
-				MaxAllowAddPiece:        cctx.Int("max-allow-addpiece"),
+				MaxTask:                 cctx.Int("max-task"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,
@@ -501,11 +501,13 @@ var runCmd = &cli.Command{
 			return out
 		}
 
+		taskIntervalTime := cctx.Duration("task-interval-time")
+
 		go func() {
 			heartbeats := time.NewTicker(stores.HeartbeatInterval)
 			defer heartbeats.Stop()
 
-			tasksched := time.NewTicker(5 * time.Minute)
+			tasksched := time.NewTicker(taskIntervalTime * time.Minute)
 			defer tasksched.Stop()
 
 			var redeclareStorage bool
@@ -557,13 +559,13 @@ var runCmd = &cli.Command{
 						readyCh = nil
 					case <-heartbeats.C:
 					case <-tasksched.C:
-						maxAllowAddPiece := workerApi.LocalWorker.GetMaxAllowAddPiece()
-						if maxAllowAddPiece > 0 {
+						if workerApi.LocalWorker.GetCurrentTask() <= workerApi.LocalWorker.GetMaxTask()+1 {
 							sectorID, err := nodeApi.PledgeSector(ctx)
 							if err != nil {
 								log.Warnf("worker pledge err: %s", err.Error())
 							} else {
-								workerApi.LocalWorker.SetAllowSectorNumber(sectorID.Number)
+								workerApi.LocalWorker.AddTask()
+								workerApi.LocalWorker.SetRequestSectorNumber(sectorID.Number)
 								log.Infof("worker pledge sector %d", sectorID.Number)
 							}
 						}

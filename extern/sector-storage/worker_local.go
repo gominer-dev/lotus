@@ -39,7 +39,7 @@ type WorkerConfig struct {
 	// with the local worker.
 	IgnoreResourceFiltering bool
 
-	MaxAllowAddPiece int
+	MaxTask int
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -54,9 +54,10 @@ type LocalWorker struct {
 	noSwap     bool
 
 	// see equivalent field on WorkerConfig.
-	ignoreResources   bool
-	maxAllowAddPiece  int
-	allowSectorNumber abi.SectorNumber
+	ignoreResources     bool
+	maxTask             int
+	currentTask         int
+	requestSectorNumber abi.SectorNumber
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -83,13 +84,14 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		ct: &workerCallTracker{
 			st: cst,
 		},
-		acceptTasks:      acceptTasks,
-		executor:         executor,
-		noSwap:           wcfg.NoSwap,
-		ignoreResources:  wcfg.IgnoreResourceFiltering,
-		maxAllowAddPiece: wcfg.MaxAllowAddPiece,
-		session:          uuid.New(),
-		closing:          make(chan struct{}),
+		acceptTasks:     acceptTasks,
+		executor:        executor,
+		noSwap:          wcfg.NoSwap,
+		ignoreResources: wcfg.IgnoreResourceFiltering,
+		maxTask:         wcfg.MaxTask,
+		currentTask:     0,
+		session:         uuid.New(),
+		closing:         make(chan struct{}),
 	}
 
 	if w.executor == nil {
@@ -300,12 +302,24 @@ func doReturn(ctx context.Context, rt ReturnType, ci storiface.CallID, ret stori
 	return true
 }
 
-func (l *LocalWorker) GetMaxAllowAddPiece() int {
-	return l.maxAllowAddPiece
+func (l *LocalWorker) GetMaxTask() int {
+	return l.maxTask
 }
 
-func (l *LocalWorker) SetAllowSectorNumber(allowSectorNumber abi.SectorNumber) {
-	l.allowSectorNumber = allowSectorNumber
+func (l *LocalWorker) GetCurrentTask() int {
+	return l.currentTask
+}
+
+func (l *LocalWorker) SetRequestSectorNumber(sector abi.SectorNumber) {
+	l.requestSectorNumber = sector
+}
+
+func (l *LocalWorker) AddTask() {
+	l.currentTask = l.currentTask + 1
+}
+
+func (l *LocalWorker) SubTask() {
+	l.currentTask = l.currentTask - 1
 }
 
 func (l *LocalWorker) NewSector(ctx context.Context, sector storage.SectorRef) error {
@@ -323,14 +337,8 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
-	l.maxAllowAddPiece = l.maxAllowAddPiece - 1
-
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
-		if err != nil {
-			l.maxAllowAddPiece = l.maxAllowAddPiece + 1
-		}
-		return pieceInfo, err
+		return sb.AddPiece(ctx, sector, epcs, sz, r)
 	})
 }
 
@@ -351,22 +359,24 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 		{
 			// cleanup previous failed attempts if they exist
 			if err := l.storage.Remove(ctx, sector.ID, storiface.FTSealed, true, nil); err != nil {
+				l.SubTask()
 				return nil, xerrors.Errorf("cleaning up sealed data: %w", err)
 			}
 
 			if err := l.storage.Remove(ctx, sector.ID, storiface.FTCache, true, nil); err != nil {
+				l.SubTask()
 				return nil, xerrors.Errorf("cleaning up cache data: %w", err)
 			}
 		}
 
 		sb, err := l.executor()
 		if err != nil {
+			l.SubTask()
 			return nil, err
 		}
+
 		preCommit1Out, err := sb.SealPreCommit1(ctx, sector, ticket, pieces)
-
-		l.maxAllowAddPiece = l.maxAllowAddPiece + 1
-
+		l.SubTask()
 		return preCommit1Out, err
 	})
 }
@@ -531,10 +541,11 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:          hostname,
-		IgnoreResources:   l.ignoreResources,
-		MaxAllowAddPiece:  l.maxAllowAddPiece,
-		AllowSectorNumber: l.allowSectorNumber,
+		Hostname:            hostname,
+		IgnoreResources:     l.ignoreResources,
+		MaxTask:             l.maxTask,
+		CurrentTask:         l.currentTask,
+		RequestSectorNumber: l.requestSectorNumber,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,

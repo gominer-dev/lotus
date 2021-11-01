@@ -400,13 +400,13 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
-				if task.taskType == sealtasks.TTAddPiece && workerInfo.MaxAllowAddPiece == 0 {
-					log.Debugw("skipping max allow addpiece", "worker", worker.info.Hostname)
+				if task.taskType == sealtasks.TTAddPiece && task.sector.ID.Number != workerInfo.RequestSectorNumber {
+					log.Debugw("skipping not allow sector number for worker", "worker", worker.info.Hostname, "task", task.sector.ID.Number, "workerallow", workerInfo.RequestSectorNumber)
 					continue
 				}
 
-				if task.taskType == sealtasks.TTAddPiece && task.sector.ID.Number != workerInfo.AllowSectorNumber {
-					log.Debugw("skipping not allow sector number for worker", "worker", worker.info.Hostname, "task", task.sector.ID.Number, "workerallow", workerInfo.AllowSectorNumber)
+				if task.taskType == sealtasks.TTPreCommit1 && workerInfo.CurrentTask >= workerInfo.MaxTask {
+					log.Debugw("skipping max allow precommit1", "worker", workerInfo.Hostname)
 					continue
 				}
 
