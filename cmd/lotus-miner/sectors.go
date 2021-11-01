@@ -80,6 +80,32 @@ var sectorsPledgeCmd = &cli.Command{
 	},
 }
 
+var sectorsPledgeSwitchCmd = &cli.Command{
+	Name:  "pledge-switch",
+	Usage: "pledge switch",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "sw",
+			Usage: "switch pledge",
+			Value: true,
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		_ = nodeApi.PledgeSwitch(ctx, cctx.Bool("sw"))
+
+		fmt.Println("Pledge sectors switch: ", cctx.Bool("sw"))
+
+		return nil
+	},
+}
+
 var sectorsStatusCmd = &cli.Command{
 	Name:      "status",
 	Usage:     "Get the seal status of a sector by its number",

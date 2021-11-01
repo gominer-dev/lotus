@@ -9,6 +9,11 @@ import (
 )
 
 func (m *Sealing) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
+
+	if !m.pledgeSwitch {
+		return storage.SectorRef{}, xerrors.Errorf("disable pledge sector")
+	}
+
 	m.startupWait.Wait()
 
 	m.inputLk.Lock()

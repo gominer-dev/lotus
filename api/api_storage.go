@@ -53,6 +53,7 @@ type StorageMiner interface {
 
 	// Temp api for testing
 	PledgeSector(context.Context) (abi.SectorID, error) //perm:write
+	PledgeSwitch(ctx context.Context, sw bool) error
 
 	// Get the status of a given sector by ID
 	SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnChainInfo bool) (SectorInfo, error) //perm:read

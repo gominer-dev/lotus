@@ -35,6 +35,11 @@ func (m *Miner) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
 	return m.sealing.PledgeSector(ctx)
 }
 
+func (m *Miner) PledgeSwitch(ctx context.Context, sw bool) error {
+	m.sealing.PledgeSwitch(sw)
+	return nil
+}
+
 func (m *Miner) ForceSectorState(ctx context.Context, id abi.SectorNumber, state sealing.SectorState) error {
 	return m.sealing.ForceSectorState(ctx, id, state)
 }

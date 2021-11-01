@@ -118,6 +118,8 @@ type Sealing struct {
 	commiter    *CommitBatcher
 
 	getConfig GetSealingConfigFunc
+
+	pledgeSwitch bool
 }
 
 type openSector struct {
@@ -165,6 +167,8 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 
 		getConfig: gc,
 
+		pledgeSwitch: true,
+
 		stats: SectorStats{
 			bySector: map[abi.SectorID]SectorState{},
 			byState:  map[SectorState]int64{},
@@ -175,6 +179,10 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s
+}
+
+func (m *Sealing) PledgeSwitch(sw bool) {
+	m.pledgeSwitch = sw
 }
 
 func (m *Sealing) Run(ctx context.Context) error {
