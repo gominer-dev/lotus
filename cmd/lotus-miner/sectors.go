@@ -44,6 +44,7 @@ var sectorsCmd = &cli.Command{
 		sectorsRefsCmd,
 		sectorsUpdateCmd,
 		sectorsPledgeCmd,
+		sectorsPledgeSwitchCmd,
 		sectorsCheckExpireCmd,
 		sectorsExpiredCmd,
 		sectorsRenewCmd,
