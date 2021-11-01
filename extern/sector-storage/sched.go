@@ -394,8 +394,19 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
-				if task.taskType == sealtasks.TTAddPiece && worker.info.MaxAllowAddPiece == 0 {
+				workerInfo, err := worker.workerRpc.Info(context.TODO())
+				if err != nil {
+					log.Debugw("worker is connection failed", "worker", worker.info.Hostname)
+					continue
+				}
+
+				if task.taskType == sealtasks.TTAddPiece && workerInfo.MaxAllowAddPiece == 0 {
 					log.Debugw("skipping max allow addpiece", "worker", worker.info.Hostname)
+					continue
+				}
+
+				if task.taskType == sealtasks.TTAddPiece && task.sector.ID.Number != workerInfo.AllowSectorNumber {
+					log.Debugw("skipping not allow sector number for worker", "worker", worker.info.Hostname, "task", task.sector.ID.Number, "workerallow", workerInfo.AllowSectorNumber)
 					continue
 				}
 
@@ -405,7 +416,7 @@ func (sh *scheduler) trySched() {
 				}
 
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
-				ok, err := task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
+				ok, err = task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
 				cancel()
 				if err != nil {
 					log.Errorf("trySched(1) req.sel.Ok error: %+v", err)

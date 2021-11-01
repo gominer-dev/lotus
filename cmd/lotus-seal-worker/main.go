@@ -182,6 +182,11 @@ var runCmd = &cli.Command{
 			Usage: "prepare add piece quantity in advance",
 			Value: 2,
 		},
+		&cli.BoolFlag{
+			Name:  "auto-pledge",
+			Usage: "enables task for auto",
+			Value: true,
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -500,6 +505,9 @@ var runCmd = &cli.Command{
 			heartbeats := time.NewTicker(stores.HeartbeatInterval)
 			defer heartbeats.Stop()
 
+			tasksched := time.NewTicker(5 * time.Minute)
+			defer tasksched.Stop()
+
 			var redeclareStorage bool
 			var readyCh chan struct{}
 			for {
@@ -548,6 +556,17 @@ var runCmd = &cli.Command{
 
 						readyCh = nil
 					case <-heartbeats.C:
+					case <-tasksched.C:
+						maxAllowAddPiece := workerApi.LocalWorker.GetMaxAllowAddPiece()
+						if maxAllowAddPiece > 0 {
+							sectorID, err := nodeApi.PledgeSector(ctx)
+							if err != nil {
+								log.Warnf("worker pledge err: %s", err.Error())
+							} else {
+								workerApi.LocalWorker.SetAllowSectorNumber(sectorID.Number)
+								log.Infof("worker pledge sector %d", sectorID.Number)
+							}
+						}
 					case <-ctx.Done():
 						return // graceful shutdown
 					}

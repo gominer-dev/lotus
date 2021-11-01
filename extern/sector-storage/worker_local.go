@@ -54,8 +54,9 @@ type LocalWorker struct {
 	noSwap     bool
 
 	// see equivalent field on WorkerConfig.
-	ignoreResources  bool
-	maxAllowAddPiece int
+	ignoreResources   bool
+	maxAllowAddPiece  int
+	allowSectorNumber abi.SectorNumber
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -299,6 +300,14 @@ func doReturn(ctx context.Context, rt ReturnType, ci storiface.CallID, ret stori
 	return true
 }
 
+func (l *LocalWorker) GetMaxAllowAddPiece() int {
+	return l.maxAllowAddPiece
+}
+
+func (l *LocalWorker) SetAllowSectorNumber(allowSectorNumber abi.SectorNumber) {
+	l.allowSectorNumber = allowSectorNumber
+}
+
 func (l *LocalWorker) NewSector(ctx context.Context, sector storage.SectorRef) error {
 	sb, err := l.executor()
 	if err != nil {
@@ -522,9 +531,10 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:         hostname,
-		IgnoreResources:  l.ignoreResources,
-		MaxAllowAddPiece: l.maxAllowAddPiece,
+		Hostname:          hostname,
+		IgnoreResources:   l.ignoreResources,
+		MaxAllowAddPiece:  l.maxAllowAddPiece,
+		AllowSectorNumber: l.allowSectorNumber,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,

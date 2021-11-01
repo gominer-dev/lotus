@@ -25,7 +25,8 @@ type WorkerInfo struct {
 	IgnoreResources bool
 	Resources       WorkerResources
 
-	MaxAllowAddPiece int
+	MaxAllowAddPiece  int
+	AllowSectorNumber abi.SectorNumber
 }
 
 type WorkerResources struct {
