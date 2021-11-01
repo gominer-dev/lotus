@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"os"
 	"reflect"
 	"runtime"
 	"sync"
@@ -39,6 +38,8 @@ type WorkerConfig struct {
 	// with the local worker.
 	IgnoreResourceFiltering bool
 
+	HostName string
+
 	MaxTask int
 }
 
@@ -58,6 +59,7 @@ type LocalWorker struct {
 	maxTask             int
 	currentTask         int
 	requestSectorNumber abi.SectorNumber
+	hostname            string
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -88,6 +90,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		executor:        executor,
 		noSwap:          wcfg.NoSwap,
 		ignoreResources: wcfg.IgnoreResourceFiltering,
+		hostname:        wcfg.HostName,
 		maxTask:         wcfg.MaxTask,
 		currentTask:     0,
 		session:         uuid.New(),
@@ -515,10 +518,6 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 }
 
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
-	hostname, err := os.Hostname() // TODO: allow overriding from config
-	if err != nil {
-		panic(err)
-	}
 
 	gpus, err := ffi.GetGPUDevices()
 	if err != nil {
@@ -541,7 +540,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:            hostname,
+		Hostname:            l.hostname,
 		IgnoreResources:     l.ignoreResources,
 		MaxTask:             l.maxTask,
 		CurrentTask:         l.currentTask,

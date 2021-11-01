@@ -187,6 +187,11 @@ var runCmd = &cli.Command{
 			Usage: "add task interval time",
 			Value: 10,
 		},
+		&cli.StringFlag{
+			Name:  "hostname",
+			Usage: "setting hostname",
+			Value: "gominer",
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -416,6 +421,7 @@ var runCmd = &cli.Command{
 				NoSwap:                  cctx.Bool("no-swap"),
 				IgnoreResourceFiltering: cctx.Bool("ignore-resource"),
 				MaxTask:                 cctx.Int("max-task"),
+				HostName:                cctx.String("hostname"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,
