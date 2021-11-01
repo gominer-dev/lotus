@@ -701,6 +701,8 @@ type StorageMinerStruct struct {
 
 		PledgeSector func(p0 context.Context) (abi.SectorID, error) `perm:"write"`
 
+		PledgeSwitch func(p0 context.Context, p1 bool) error `perm:"write"`
+
 		ReturnAddPiece func(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error `perm:"admin"`
 
 		ReturnFetch func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
@@ -4119,6 +4121,17 @@ func (s *StorageMinerStruct) PledgeSector(p0 context.Context) (abi.SectorID, err
 
 func (s *StorageMinerStub) PledgeSector(p0 context.Context) (abi.SectorID, error) {
 	return *new(abi.SectorID), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) PledgeSwitch(p0 context.Context, p1 bool) error {
+	if s.Internal.PledgeSwitch == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.PledgeSwitch(p0, p1)
+}
+
+func (s *StorageMinerStub) PledgeSwitch(p0 context.Context, p1 bool) error {
+	return ErrNotSupported
 }
 
 func (s *StorageMinerStruct) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error {
