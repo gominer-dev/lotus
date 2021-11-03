@@ -135,7 +135,7 @@ var runCmd = &cli.Command{
 		&cli.BoolFlag{
 			Name:  "no-swap",
 			Usage: "don't use swap",
-			Value: false,
+			Value: true,
 		},
 		&cli.BoolFlag{
 			Name:  "addpiece",
@@ -182,15 +182,26 @@ var runCmd = &cli.Command{
 			Usage: "prepare add piece quantity in advance",
 			Value: 15,
 		},
+		&cli.BoolFlag{
+			Name:  "initialization",
+			Usage: "enable parent cache initialization time",
+			Value: true,
+		},
 		&cli.DurationFlag{
-			Name:  "task-interval-time",
-			Usage: "add task interval time",
-			Value: 10,
+			Name:    "task-interval-time",
+			Usage:   "add task interval time for minute",
+			EnvVars: []string{"TASK_INTERVAL_TIME"},
+			Value:   16,
 		},
 		&cli.StringFlag{
 			Name:  "hostname",
 			Usage: "setting hostname",
 			Value: "gominer",
+		},
+		&cli.BoolFlag{
+			Name:  "auto-pledge",
+			Usage: "auto pledge",
+			Value: true,
 		},
 	},
 	Before: func(cctx *cli.Context) error {
@@ -508,13 +519,19 @@ var runCmd = &cli.Command{
 		}
 
 		taskIntervalTime := cctx.Duration("task-interval-time")
+		initialization := cctx.Bool("initialization")
+		autoPledge := cctx.Bool("auto-pledge")
 
 		go func() {
 			heartbeats := time.NewTicker(stores.HeartbeatInterval)
 			defer heartbeats.Stop()
 
-			tasksched := time.NewTicker(taskIntervalTime * time.Minute)
+			tasksched := time.NewTicker(3 * time.Minute)
 			defer tasksched.Stop()
+
+			if !autoPledge {
+				tasksched.Stop()
+			}
 
 			var redeclareStorage bool
 			var readyCh chan struct{}
@@ -574,6 +591,13 @@ var runCmd = &cli.Command{
 								workerApi.LocalWorker.SetRequestSectorNumber(sectorID.Number)
 								log.Infof("worker pledge sector %d", sectorID.Number)
 							}
+						}
+
+						if initialization {
+							tasksched.Reset(30 * time.Minute)
+							initialization = false
+						} else {
+							tasksched.Reset(taskIntervalTime)
 						}
 					case <-ctx.Done():
 						return // graceful shutdown
