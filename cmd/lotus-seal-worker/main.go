@@ -578,7 +578,7 @@ var runCmd = &cli.Command{
 							if err != nil {
 								log.Warnf("worker pledge err: %s", err.Error())
 							} else {
-								workerApi.LocalWorker.AddTask(sectorID.Number)
+								workerApi.LocalWorker.SetTask(sectorID.Number)
 								log.Infof("worker pledge sector %d", sectorID.Number)
 							}
 						}
