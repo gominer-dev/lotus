@@ -332,7 +332,7 @@ func doReturn(ctx context.Context, rt ReturnType, ci storiface.CallID, ret stori
 }
 
 func (l *LocalWorker) IsSched() bool {
-	if l.addPieceCount < l.addPieceLimit {
+	if l.addPieceCount+l.preCommit1Count < l.addPieceLimit+l.preCommit1Limit {
 		return true
 	}
 	return false
