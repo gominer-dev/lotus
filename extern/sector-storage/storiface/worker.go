@@ -25,9 +25,15 @@ type WorkerInfo struct {
 	IgnoreResources bool
 	Resources       WorkerResources
 
-	MaxTask             int
-	CurrentTask         int
-	RequestSectorNumber abi.SectorNumber
+	AddPieceCount   int
+	AddPieceLimit   int
+	PreCommit1Count int
+	PreCommit1Limit int
+	PreCommit2Count int
+	PreCommit2Limit int
+	CommitCount     int
+	CommitLimit     int
+	Sectors         []abi.SectorNumber
 }
 
 type WorkerResources struct {

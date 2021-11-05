@@ -400,14 +400,26 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
-				if task.taskType == sealtasks.TTAddPiece && task.sector.ID.Number != workerInfo.RequestSectorNumber {
-					log.Debugw("skipping not allow sector number for worker", "worker", worker.info.Hostname, "task", task.sector.ID.Number, "workerallow", workerInfo.RequestSectorNumber)
-					continue
-				}
-
-				if task.taskType == sealtasks.TTPreCommit1 && workerInfo.CurrentTask >= workerInfo.MaxTask {
-					log.Debugw("skipping max allow precommit1", "worker", workerInfo.Hostname)
-					continue
+				if task.taskType == sealtasks.TTAddPiece {
+					if workerInfo.AddPieceCount >= workerInfo.AddPieceLimit {
+						log.Debugw("skipping precommit1 limit", "worker", workerInfo.Hostname)
+						continue
+					}
+				} else if task.taskType == sealtasks.TTPreCommit1 {
+					if workerInfo.PreCommit1Count >= workerInfo.PreCommit1Limit {
+						log.Debugw("skipping precommit1 limit", "worker", workerInfo.Hostname)
+						continue
+					}
+				} else if task.taskType == sealtasks.TTPreCommit2 {
+					if workerInfo.PreCommit2Count >= workerInfo.PreCommit2Limit {
+						log.Debugw("skipping precommit2 limit", "worker", workerInfo.Hostname)
+						continue
+					}
+				} else if task.taskType == sealtasks.TTCommit2 {
+					if workerInfo.CommitCount >= workerInfo.CommitLimit {
+						log.Debugw("skipping commit limit", "worker", workerInfo.Hostname)
+						continue
+					}
 				}
 
 				// TODO: allow bigger windows
