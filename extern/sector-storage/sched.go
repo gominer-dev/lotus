@@ -422,16 +422,11 @@ func (sh *scheduler) trySched() {
 					}
 				}
 
-				if !workerInfo.AnySectors {
-					existTask := false
-					for _, sn := range workerInfo.Sectors {
-						if task.sector.ID.Number == sn {
-							existTask = true
+				if task.taskType == sealtasks.TTAddPiece {
+					if !workerInfo.AnySectors {
+						if task.sector.ID.Number == workerInfo.RequestSector {
+							continue
 						}
-					}
-					if !existTask {
-						log.Debugw("skipping not match worker", "worker", workerInfo.Hostname)
-						continue
 					}
 				}
 

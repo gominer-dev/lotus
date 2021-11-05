@@ -34,8 +34,8 @@ type WorkerInfo struct {
 	CommitCount     int
 	CommitLimit     int
 
-	Sectors    []abi.SectorNumber
-	AnySectors bool
+	RequestSector abi.SectorNumber
+	AnySectors    bool
 }
 
 type WorkerResources struct {

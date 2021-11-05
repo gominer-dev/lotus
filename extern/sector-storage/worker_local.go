@@ -73,8 +73,8 @@ type LocalWorker struct {
 	preCommit2Count int
 	commitCount     int
 
-	sectors    []abi.SectorNumber
-	anySectors bool
+	requestSector abi.SectorNumber
+	anySectors    bool
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -119,8 +119,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		preCommit2Count: 0,
 		commitCount:     0,
 
-		anySectors: wcfg.AnySectors,
-		sectors:    []abi.SectorNumber{},
+		anySectors:    wcfg.AnySectors,
+		requestSector: abi.SectorNumber(0),
 	}
 
 	if w.executor == nil {
@@ -340,17 +340,8 @@ func (l *LocalWorker) IsSched() bool {
 	return false
 }
 
-func (l *LocalWorker) AddTask(sector abi.SectorNumber) {
-	l.sectors = append(l.sectors, sector)
-}
-
-func (l *LocalWorker) RemoveTask(sector abi.SectorNumber) {
-	for i := 0; i < len(l.sectors); i++ {
-		if l.sectors[i] == sector {
-			l.sectors = append(l.sectors[:i], l.sectors[i+1:]...)
-			i--
-		}
-	}
+func (l *LocalWorker) SetTask(sector abi.SectorNumber) {
+	l.requestSector = sector
 }
 
 func (l *LocalWorker) NewSector(ctx context.Context, sector storage.SectorRef) error {
@@ -378,7 +369,6 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 
 func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileType storiface.SectorFileType, ptype storiface.PathType, am storiface.AcquireMode) (storiface.CallID, error) {
 	log.Info("sectors done")
-	l.RemoveTask(sector.ID.Number)
 	return l.asyncCall(ctx, sector, Fetch, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		_, done, err := (&localWorkerPathProvider{w: l, op: am}).AcquireSector(ctx, sector, fileType, storiface.FTNone, ptype)
 		if err == nil {
@@ -593,7 +583,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		CommitLimit:     l.commitLimit,
 		CommitCount:     l.commitCount,
 		AnySectors:      l.anySectors,
-		Sectors:         l.sectors,
+		RequestSector:   l.requestSector,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,
