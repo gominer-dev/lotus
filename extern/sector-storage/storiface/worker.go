@@ -33,7 +33,9 @@ type WorkerInfo struct {
 	PreCommit2Limit int
 	CommitCount     int
 	CommitLimit     int
-	Sectors         []abi.SectorNumber
+
+	Sectors    []abi.SectorNumber
+	AnySectors bool
 }
 
 type WorkerResources struct {

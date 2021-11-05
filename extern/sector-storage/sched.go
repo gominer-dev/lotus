@@ -422,6 +422,19 @@ func (sh *scheduler) trySched() {
 					}
 				}
 
+				if !workerInfo.AnySectors {
+					existTask := false
+					for _, sn := range workerInfo.Sectors {
+						if task.sector.ID.Number == sn {
+							existTask = true
+						}
+					}
+					if !existTask {
+						log.Debugw("skipping not match worker", "worker", workerInfo.Hostname)
+						continue
+					}
+				}
+
 				// TODO: allow bigger windows
 				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
 					continue
