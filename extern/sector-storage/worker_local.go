@@ -40,7 +40,12 @@ type WorkerConfig struct {
 
 	HostName string
 
-	MaxTask int
+	AddPieceLimit   int
+	PreCommit1Limit int
+	PreCommit2Limit int
+	CommitLimit     int
+
+	AnySectors bool
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -55,11 +60,21 @@ type LocalWorker struct {
 	noSwap     bool
 
 	// see equivalent field on WorkerConfig.
-	ignoreResources     bool
-	maxTask             int
-	currentTask         int
-	requestSectorNumber abi.SectorNumber
-	hostname            string
+	ignoreResources bool
+	hostname        string
+
+	addPieceLimit   int
+	preCommit1Limit int
+	preCommit2Limit int
+	commitLimit     int
+
+	addPieceCount   int
+	preCommit1Count int
+	preCommit2Count int
+	commitCount     int
+
+	sectors    []abi.SectorNumber
+	anySectors bool
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -91,10 +106,21 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		noSwap:          wcfg.NoSwap,
 		ignoreResources: wcfg.IgnoreResourceFiltering,
 		hostname:        wcfg.HostName,
-		maxTask:         wcfg.MaxTask,
-		currentTask:     0,
 		session:         uuid.New(),
 		closing:         make(chan struct{}),
+
+		addPieceLimit:   wcfg.AddPieceLimit,
+		preCommit1Limit: wcfg.PreCommit1Limit,
+		preCommit2Limit: wcfg.PreCommit2Limit,
+		commitLimit:     wcfg.CommitLimit,
+
+		addPieceCount:   0,
+		preCommit1Count: 0,
+		preCommit2Count: 0,
+		commitCount:     0,
+
+		anySectors: wcfg.AnySectors,
+		sectors:    []abi.SectorNumber{},
 	}
 
 	if w.executor == nil {
@@ -305,24 +331,24 @@ func doReturn(ctx context.Context, rt ReturnType, ci storiface.CallID, ret stori
 	return true
 }
 
-func (l *LocalWorker) GetMaxTask() int {
-	return l.maxTask
+func (l *LocalWorker) IsSched() bool {
+	if l.addPieceCount < l.addPieceLimit {
+		return true
+	}
+	return false
 }
 
-func (l *LocalWorker) GetCurrentTask() int {
-	return l.currentTask
+func (l *LocalWorker) AddTask(sector abi.SectorNumber) {
+	l.sectors = append(l.sectors, sector)
 }
 
-func (l *LocalWorker) SetRequestSectorNumber(sector abi.SectorNumber) {
-	l.requestSectorNumber = sector
-}
-
-func (l *LocalWorker) AddTask() {
-	l.currentTask = l.currentTask + 1
-}
-
-func (l *LocalWorker) SubTask() {
-	l.currentTask = l.currentTask - 1
+func (l *LocalWorker) RemoveTask(sector abi.SectorNumber) {
+	for i := 0; i < len(l.sectors); i++ {
+		if l.sectors[i] == sector {
+			l.sectors = append(l.sectors[:i], l.sectors[i+1:]...)
+			i--
+		}
+	}
 }
 
 func (l *LocalWorker) NewSector(ctx context.Context, sector storage.SectorRef) error {
@@ -341,11 +367,18 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 	}
 
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.AddPiece(ctx, sector, epcs, sz, r)
+		l.addPieceCount += 1
+		pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
+		if err != nil {
+			l.addPieceCount -= 1
+		}
+		return pieceInfo, err
 	})
 }
 
 func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileType storiface.SectorFileType, ptype storiface.PathType, am storiface.AcquireMode) (storiface.CallID, error) {
+	log.Info("sectors done")
+	l.RemoveTask(sector.ID.Number)
 	return l.asyncCall(ctx, sector, Fetch, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		_, done, err := (&localWorkerPathProvider{w: l, op: am}).AcquireSector(ctx, sector, fileType, storiface.FTNone, ptype)
 		if err == nil {
@@ -357,41 +390,49 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 }
 
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
+	l.preCommit1Count += 1
 	return l.asyncCall(ctx, sector, SealPreCommit1, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 
 		{
 			// cleanup previous failed attempts if they exist
 			if err := l.storage.Remove(ctx, sector.ID, storiface.FTSealed, true, nil); err != nil {
-				l.SubTask()
+				l.preCommit1Count -= 1
 				return nil, xerrors.Errorf("cleaning up sealed data: %w", err)
 			}
 
 			if err := l.storage.Remove(ctx, sector.ID, storiface.FTCache, true, nil); err != nil {
-				l.SubTask()
+				l.preCommit1Count -= 1
 				return nil, xerrors.Errorf("cleaning up cache data: %w", err)
 			}
 		}
 
 		sb, err := l.executor()
 		if err != nil {
-			l.SubTask()
+			l.preCommit1Count -= 1
 			return nil, err
 		}
 
 		preCommit1Out, err := sb.SealPreCommit1(ctx, sector, ticket, pieces)
-		l.SubTask()
+		if err == nil {
+			l.addPieceCount -= 1
+		}
+		l.preCommit1Count -= 1
 		return preCommit1Out, err
 	})
 }
 
 func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.PreCommit1Out) (storiface.CallID, error) {
+	l.preCommit2Count += 1
 	sb, err := l.executor()
 	if err != nil {
+		l.preCommit2Count -= 1
 		return storiface.UndefCall, err
 	}
 
 	return l.asyncCall(ctx, sector, SealPreCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.SealPreCommit2(ctx, sector, phase1Out)
+		cids, err := sb.SealPreCommit2(ctx, sector, phase1Out)
+		l.preCommit2Count -= 1
+		return cids, err
 	})
 }
 
@@ -407,13 +448,17 @@ func (l *LocalWorker) SealCommit1(ctx context.Context, sector storage.SectorRef,
 }
 
 func (l *LocalWorker) SealCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.Commit1Out) (storiface.CallID, error) {
+	l.commitCount += 1
 	sb, err := l.executor()
 	if err != nil {
+		l.commitCount -= 1
 		return storiface.UndefCall, err
 	}
 
 	return l.asyncCall(ctx, sector, SealCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.SealCommit2(ctx, sector, phase1Out)
+		proof, err := sb.SealCommit2(ctx, sector, phase1Out)
+		l.commitCount -= 1
+		return proof, err
 	})
 }
 
@@ -540,11 +585,18 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:            l.hostname,
-		IgnoreResources:     l.ignoreResources,
-		MaxTask:             l.maxTask,
-		CurrentTask:         l.currentTask,
-		RequestSectorNumber: l.requestSectorNumber,
+		Hostname:        l.hostname,
+		IgnoreResources: l.ignoreResources,
+		AddPieceLimit:   l.addPieceLimit,
+		AddPieceCount:   l.addPieceCount,
+		PreCommit1Limit: l.preCommit1Limit,
+		PreCommit1Count: l.preCommit1Count,
+		PreCommit2Limit: l.preCommit2Limit,
+		PreCommit2Count: l.preCommit2Count,
+		CommitLimit:     l.commitLimit,
+		CommitCount:     l.commitCount,
+		AnySectors:      l.anySectors,
+		Sectors:         l.sectors,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,

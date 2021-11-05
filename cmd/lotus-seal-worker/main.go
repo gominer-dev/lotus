@@ -137,30 +137,10 @@ var runCmd = &cli.Command{
 			Usage: "don't use swap",
 			Value: true,
 		},
-		&cli.BoolFlag{
-			Name:  "addpiece",
-			Usage: "enable addpiece",
-			Value: true,
-		},
-		&cli.BoolFlag{
-			Name:  "precommit1",
-			Usage: "enable precommit1 (32G sectors: 1 core, 128GiB Memory)",
-			Value: true,
-		},
-		&cli.BoolFlag{
-			Name:  "unseal",
-			Usage: "enable unsealing (32G sectors: 1 core, 128GiB Memory)",
-			Value: true,
-		},
-		&cli.BoolFlag{
-			Name:  "precommit2",
-			Usage: "enable precommit2 (32G sectors: all cores, 96GiB Memory)",
-			Value: true,
-		},
-		&cli.BoolFlag{
-			Name:  "commit",
-			Usage: "enable commit (32G sectors: all cores or GPUs, 128GiB Memory + 64GiB swap)",
-			Value: true,
+		&cli.StringFlag{
+			Name:  "features",
+			Usage: "features",
+			Value: "precommit",
 		},
 		&cli.IntFlag{
 			Name:  "parallel-fetch-limit",
@@ -177,31 +157,44 @@ var runCmd = &cli.Command{
 			Usage: "enables task distribution to happen on this worker regardless of its currently available resources",
 			Value: true,
 		},
-		&cli.IntFlag{
-			Name:  "max-task",
-			Usage: "prepare add piece quantity in advance",
-			Value: 15,
-		},
 		&cli.BoolFlag{
 			Name:  "initialization",
 			Usage: "enable parent cache initialization time",
 			Value: true,
 		},
 		&cli.DurationFlag{
-			Name:    "task-interval-time",
-			Usage:   "add task interval time for minute",
-			EnvVars: []string{"TASK_INTERVAL_TIME"},
-			Value:   16,
+			Name:  "task-interval",
+			Usage: "add task interval time for minute",
 		},
 		&cli.StringFlag{
 			Name:  "hostname",
 			Usage: "setting hostname",
 			Value: "gominer",
 		},
+		&cli.IntFlag{
+			Name:  "addpiece-limit",
+			Usage: "addpiece limit",
+			Value: 2,
+		},
+		&cli.IntFlag{
+			Name:  "precommit1-limit",
+			Usage: "precommit1 limit",
+			Value: 14,
+		},
+		&cli.IntFlag{
+			Name:  "precommit2-limit",
+			Usage: "precommit2 limit",
+			Value: 1,
+		},
+		&cli.IntFlag{
+			Name:  "commit-limit",
+			Usage: "commit limit",
+			Value: 1,
+		},
 		&cli.BoolFlag{
-			Name:  "auto-pledge",
-			Usage: "auto pledge",
-			Value: true,
+			Name:  "any-sectors",
+			Usage: "any sectors",
+			Value: false,
 		},
 	},
 	Before: func(cctx *cli.Context) error {
@@ -273,34 +266,24 @@ var runCmd = &cli.Command{
 			return err
 		}
 
-		if cctx.Bool("commit") {
+		features := cctx.String("features")
+
+		if features == "commit" {
 			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
 				return xerrors.Errorf("get params: %w", err)
 			}
 		}
 
 		var taskTypes []sealtasks.TaskType
-
 		taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTFinalize)
 
-		if cctx.Bool("addpiece") {
+		if features == "precommit" {
 			taskTypes = append(taskTypes, sealtasks.TTAddPiece)
-		}
-		if cctx.Bool("precommit1") {
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
-		}
-		if cctx.Bool("unseal") {
 			taskTypes = append(taskTypes, sealtasks.TTUnseal)
-		}
-		if cctx.Bool("precommit2") {
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
-		}
-		if cctx.Bool("commit") {
+		} else {
 			taskTypes = append(taskTypes, sealtasks.TTCommit2)
-		}
-
-		if len(taskTypes) == 0 {
-			return xerrors.Errorf("no task types specified")
 		}
 
 		// Open repo
@@ -431,8 +414,12 @@ var runCmd = &cli.Command{
 				TaskTypes:               taskTypes,
 				NoSwap:                  cctx.Bool("no-swap"),
 				IgnoreResourceFiltering: cctx.Bool("ignore-resource"),
-				MaxTask:                 cctx.Int("max-task"),
 				HostName:                cctx.String("hostname"),
+				AddPieceLimit:           cctx.Int("addpiece-limit"),
+				PreCommit1Limit:         cctx.Int("precommit1-limit"),
+				PreCommit2Limit:         cctx.Int("precommit2-limit"),
+				CommitLimit:             cctx.Int("commit-limit"),
+				AnySectors:              cctx.Bool("any-sectors"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,
@@ -518,9 +505,8 @@ var runCmd = &cli.Command{
 			return out
 		}
 
-		taskIntervalTime := cctx.Duration("task-interval-time")
+		taskInterval := cctx.Duration("task-interval")
 		initialization := cctx.Bool("initialization")
-		autoPledge := cctx.Bool("auto-pledge")
 
 		go func() {
 			heartbeats := time.NewTicker(stores.HeartbeatInterval)
@@ -529,7 +515,7 @@ var runCmd = &cli.Command{
 			tasksched := time.NewTicker(3 * time.Minute)
 			defer tasksched.Stop()
 
-			if !autoPledge {
+			if features == "commit" {
 				tasksched.Stop()
 			}
 
@@ -582,13 +568,17 @@ var runCmd = &cli.Command{
 						readyCh = nil
 					case <-heartbeats.C:
 					case <-tasksched.C:
-						if workerApi.LocalWorker.GetCurrentTask() <= workerApi.LocalWorker.GetMaxTask()+1 {
+						workerInfo, err := workerApi.Info(ctx)
+						if err != nil {
+							log.Errorf("worker info error: %s", err.Error())
+						}
+						log.Infof("current tasks: ap-%d, p1-%d, p2-%d", workerInfo.AddPieceCount, workerInfo.PreCommit1Count, workerInfo.PreCommit2Count)
+						if workerApi.IsSched() {
 							sectorID, err := nodeApi.PledgeSector(ctx)
 							if err != nil {
 								log.Warnf("worker pledge err: %s", err.Error())
 							} else {
-								workerApi.LocalWorker.AddTask()
-								workerApi.LocalWorker.SetRequestSectorNumber(sectorID.Number)
+								workerApi.LocalWorker.AddTask(sectorID.Number)
 								log.Infof("worker pledge sector %d", sectorID.Number)
 							}
 						}
@@ -597,7 +587,7 @@ var runCmd = &cli.Command{
 							tasksched.Reset(30 * time.Minute)
 							initialization = false
 						} else {
-							tasksched.Reset(taskIntervalTime)
+							tasksched.Reset(taskInterval)
 						}
 					case <-ctx.Done():
 						return // graceful shutdown
