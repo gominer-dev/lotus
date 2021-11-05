@@ -402,7 +402,7 @@ func (sh *scheduler) trySched() {
 
 				if task.taskType == sealtasks.TTAddPiece {
 					if workerInfo.AddPieceCount >= workerInfo.AddPieceLimit {
-						log.Debugw("skipping precommit1 limit", "worker", workerInfo.Hostname)
+						log.Debugw("skipping addpiece limit", "worker", workerInfo.Hostname)
 						continue
 					}
 				} else if task.taskType == sealtasks.TTPreCommit1 {
