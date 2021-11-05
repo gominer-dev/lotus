@@ -332,8 +332,10 @@ func doReturn(ctx context.Context, rt ReturnType, ci storiface.CallID, ret stori
 }
 
 func (l *LocalWorker) IsSched() bool {
-	if l.addPieceCount+l.preCommit1Count < l.addPieceLimit+l.preCommit1Limit {
-		return true
+	if l.addPieceCount < l.addPieceLimit {
+		if l.preCommit2Count <= l.preCommit2Limit {
+			return true
+		}
 	}
 	return false
 }
@@ -369,9 +371,7 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		l.addPieceCount += 1
 		pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
-		if err != nil {
-			l.addPieceCount -= 1
-		}
+		l.addPieceCount -= 1
 		return pieceInfo, err
 	})
 }
@@ -413,9 +413,6 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 		}
 
 		preCommit1Out, err := sb.SealPreCommit1(ctx, sector, ticket, pieces)
-		if err == nil {
-			l.addPieceCount -= 1
-		}
 		l.preCommit1Count -= 1
 		return preCommit1Out, err
 	})
