@@ -424,7 +424,7 @@ func (sh *scheduler) trySched() {
 
 				if task.taskType == sealtasks.TTAddPiece {
 					if !workerInfo.AnySectors {
-						if task.sector.ID.Number == workerInfo.RequestSector {
+						if task.sector.ID.Number != workerInfo.RequestSector {
 							continue
 						}
 					}
