@@ -464,6 +464,17 @@ func (sh *scheduler) trySched() {
 			wid := sh.openWindows[wnd].worker
 			info := sh.workers[wid].info
 
+			remoteInfo, err := sh.workers[wid].workerRpc.Info(context.TODO())
+			if err != nil {
+				log.Warnf("remote worker (%s) got info err: %s", info.Hostname, err.Error())
+				continue
+			}
+
+			if !remoteInfo.CanSeal {
+				log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
+				continue
+			}
+
 			log.Debugf("SCHED try assign sqi:%d sector %d to window %d", sqi, task.sector.ID.Number, wnd)
 
 			// TODO: allow bigger windows
