@@ -3,6 +3,8 @@ package stores
 import (
 	"context"
 	"encoding/json"
+	storage_util "github.com/filecoin-project/lotus/tools/storage"
+	"github.com/ipfs/go-cid"
 	"io/ioutil"
 	"math/bits"
 	"math/rand"
@@ -76,6 +78,8 @@ type Local struct {
 	urls         []string
 
 	paths map[ID]*path
+
+	tempCID cid.Cid
 
 	localLk sync.RWMutex
 }
@@ -170,6 +174,8 @@ func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []st
 		localStorage: ls,
 		index:        index,
 		urls:         urls,
+
+		tempCID: cid.Undef,
 
 		paths: map[ID]*path{},
 	}
@@ -515,6 +521,53 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	}
 
 	return out, storageIDs, nil
+}
+
+// CopyAddPieceForTmp CC扇区直接从模版中拷贝
+func (st *Local) CopyAddPieceForTmp(ctx context.Context, sector storage.SectorRef) (abi.PieceInfo, error) {
+	sps, err := st.Local(ctx)
+	if err != nil {
+		return abi.PieceInfo{}, err
+	}
+	if len(sps) == 0 {
+		return abi.PieceInfo{}, xerrors.Errorf("local storage is empty")
+	}
+	sp := sps[0]
+	if !sp.CanSeal {
+		return abi.PieceInfo{}, xerrors.Errorf("local storage not can seal for first")
+	}
+	if sp.LocalPath == "" {
+		return abi.PieceInfo{}, xerrors.Errorf("local storage path is empty")
+	}
+
+	tmpDataFileName := sp.LocalPath + "/addpiece.data"
+	tmpMetaFileName := sp.LocalPath + "/addpiece.meta"
+
+	if storage_util.PathExists(tmpDataFileName) && storage_util.PathExists(tmpMetaFileName) {
+		// read cid
+		if !st.tempCID.Defined() {
+			b, err := ioutil.ReadFile(tmpMetaFileName)
+			if err != nil {
+				return abi.PieceInfo{}, xerrors.Errorf("read addpiece temp cid err: %s", err.Error())
+			}
+			if err = st.tempCID.UnmarshalText(b); err != nil {
+				return abi.PieceInfo{}, xerrors.Errorf("unmarshal text cid err: %s", err.Error())
+			}
+		}
+		// copy data
+		minerNumber := "s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
+		destName := sp.LocalPath + "/unsealed/" + minerNumber
+		if _, err := storage_util.CopyFile(destName, tmpDataFileName); err != nil {
+			return abi.PieceInfo{}, xerrors.Errorf("copy addpiece err: %s", err.Error())
+		}
+		// all ready
+		return abi.PieceInfo{
+			Size:     abi.PaddedPieceSize(34359738368),
+			PieceCID: st.tempCID,
+		}, nil
+	}
+
+	return abi.PieceInfo{}, xerrors.Errorf("addpiece temp is empty")
 }
 
 func (st *Local) Local(ctx context.Context) ([]StoragePath, error) {

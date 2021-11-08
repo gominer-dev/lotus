@@ -3,6 +3,7 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	storage_util "github.com/filecoin-project/lotus/tools/storage"
 	"io"
 	"reflect"
 	"runtime"
@@ -361,7 +362,31 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		l.addPieceCount += 1
-		pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
+		pieceInfo, err := l.localStore.CopyAddPieceForTmp(ctx, sector)
+		if err != nil {
+			log.Warnf("copy addpiece err: %s", err.Error())
+			pieceInfo, err = sb.AddPiece(ctx, sector, epcs, sz, r)
+			if err == nil {
+				// copy temp
+				ls, err := l.localStore.Local(ctx)
+				if err != nil {
+					log.Errorf("got local path err: %s", err.Error())
+					return pieceInfo, err
+				}
+				if len(ls) == 0 {
+					log.Error("local path is empty")
+					return pieceInfo, err
+				}
+				rootPath := ls[0].LocalPath
+				dstName := rootPath + "/addpiece.data"
+				sorName := rootPath + "/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
+				if _, err = storage_util.CopyFile(dstName, sorName); err != nil {
+					log.Errorf("copy addpiece err: %s", err.Error())
+				}
+				cidPathName := rootPath + "/addpiece.meta"
+				storage_util.WriteFile(cidPathName, pieceInfo.PieceCID.String())
+			}
+		}
 		l.addPieceCount -= 1
 		return pieceInfo, err
 	})
