@@ -3,6 +3,9 @@ package stores
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/ipfs/go-cid"
+	"io"
 	"io/ioutil"
 	"math/bits"
 	"math/rand"
@@ -76,6 +79,8 @@ type Local struct {
 	urls         []string
 
 	paths map[ID]*path
+
+	templateCid cid.Cid
 
 	localLk sync.RWMutex
 }
@@ -542,6 +547,163 @@ func (st *Local) Local(ctx context.Context) ([]StoragePath, error) {
 	}
 
 	return out, nil
+}
+
+func (st *Local) FirstLocal(ctx context.Context) (StoragePath, error) {
+	if sps, err := st.Local(ctx); err != nil {
+		return StoragePath{}, err
+	} else {
+		if len(sps) == 0 {
+			return StoragePath{}, xerrors.Errorf("worker missing local storage")
+		}
+		return sps[0], nil
+	}
+}
+
+func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector storage.SectorRef) (bool, error) {
+	repo, err := st.FirstLocal(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	destMetaPath := repo.LocalPath + "/unsealed/.template/piece.meta"
+
+	if err = ioutil.WriteFile(destMetaPath, cid.Bytes(), 0644); err != nil {
+		return false, err
+	}
+
+	sourcePath := repo.LocalPath + "/unsealed/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
+	destDataPath := repo.LocalPath + "/unsealed/.template/piece.data"
+
+	buf := make([]byte, 1<<30)
+	sf, err := os.Open(sourcePath)
+	if err != nil {
+		return false, err
+	}
+	defer sf.Close()
+
+	df, err := os.Create(destDataPath)
+	if err != nil {
+		return false, err
+	}
+	defer df.Close()
+
+	for {
+		n, err := sf.Read(buf)
+		if err != nil && err != io.EOF {
+			return false, err
+		}
+		if n == 0 {
+			break
+		}
+
+		if _, err := df.Write(buf[:n]); err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
+}
+
+func (st *Local) AddPieceTemplateIsEmpty(ctx context.Context) bool {
+	repo, err := st.FirstLocal(ctx)
+	if err != nil {
+		log.Warnf("local storage got first local err: %s", err.Error())
+		return false
+	}
+
+	data := repo.LocalPath + "/unsealed/.template/piece.data"
+	c := repo.LocalPath + "/unsealed/.template/piece.meta"
+
+	if isExist(data) && isExist(c) {
+		return true
+	}
+
+	return false
+}
+
+func isExist(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		if os.IsNotExist(err) {
+			return false
+		}
+		fmt.Println(err)
+		return false
+	}
+	return true
+}
+
+func (st *Local) AddPieceForTemplate(ctx context.Context, sector storage.SectorRef) (abi.PieceInfo, error) {
+	var pieceInfo abi.PieceInfo
+
+	repo, err := st.FirstLocal(ctx)
+	if err != nil {
+		return pieceInfo, err
+	}
+
+	sourcePath := repo.LocalPath + "/unsealed/.template/piece.data"
+	destPath := repo.LocalPath + "/unsealed/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
+
+	buf := make([]byte, 1<<30)
+
+	sf, err := os.Open(sourcePath)
+	if err != nil {
+		return pieceInfo, err
+	}
+	defer sf.Close()
+
+	df, err := os.Create(destPath)
+	if err != nil {
+		return pieceInfo, err
+	}
+	defer df.Close()
+
+	for {
+		n, err := sf.Read(buf)
+		if err != nil && err != io.EOF {
+			return pieceInfo, err
+		}
+		if n == 0 {
+			break
+		}
+
+		if _, err := df.Write(buf[:n]); err != nil {
+			return pieceInfo, err
+		}
+	}
+
+	c, err := st.GetTemplateCID(ctx)
+	if err != nil {
+		return pieceInfo, err
+	}
+
+	pieceInfo.PieceCID = c
+	pieceInfo.Size = 32 << 30
+
+	return pieceInfo, nil
+}
+
+func (st *Local) GetTemplateCID(ctx context.Context) (cid.Cid, error) {
+	if st.templateCid.Defined() {
+		return st.templateCid, nil
+	}
+	repo, err := st.FirstLocal(ctx)
+	if err != nil {
+		return cid.Undef, err
+	}
+	meta, err := ioutil.ReadFile(repo.LocalPath + "/unsealed/.template/piece.meta")
+	if err != nil {
+		return cid.Undef, err
+	}
+	_, c, err := cid.CidFromBytes(meta)
+	if err == nil {
+		st.templateCid = c
+	}
+	return c, err
 }
 
 func (st *Local) Remove(ctx context.Context, sid abi.SectorID, typ storiface.SectorFileType, force bool, keepIn []ID) error {

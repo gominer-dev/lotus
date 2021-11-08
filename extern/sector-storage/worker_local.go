@@ -311,7 +311,18 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 	}
 
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.AddPiece(ctx, sector, epcs, sz, r)
+		if l.localStore.AddPieceTemplateIsEmpty(ctx) {
+			pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
+			if err == nil {
+				if initAddPieceFlag, err := l.localStore.InitAddPieceTemplate(ctx, pieceInfo.PieceCID, sector); err == nil {
+					if initAddPieceFlag {
+						log.Info("init addpiece template")
+					}
+				}
+			}
+			return pieceInfo, err
+		}
+		return l.localStore.AddPieceForTemplate(ctx, sector)
 	})
 }
 
