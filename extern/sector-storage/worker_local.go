@@ -53,6 +53,7 @@ type LocalWorker struct {
 
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
+	canSeal         bool
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -75,6 +76,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		localStore: local,
 		sindex:     sindex,
 		ret:        ret,
+
+		canSeal: true,
 
 		ct: &workerCallTracker{
 			st: cst,
@@ -310,6 +313,9 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
+	l.canSeal = false
+	log.Debug("worker can seal is false")
+
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		if l.localStore.AddPieceTemplateIsEmpty(ctx) {
 			pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
@@ -338,6 +344,17 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 }
 
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for {
+			_ = <-ticker.C
+			log.Debug("worker can seal is true")
+			l.canSeal = true
+			break
+		}
+	}()
+
 	return l.asyncCall(ctx, sector, SealPreCommit1, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 
 		{
@@ -522,6 +539,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	return storiface.WorkerInfo{
 		Hostname:        hostname,
 		IgnoreResources: l.ignoreResources,
+		CanSeal:         l.canSeal,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,
