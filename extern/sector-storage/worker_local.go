@@ -379,7 +379,7 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 				}
 				rootPath := ls[0].LocalPath
 				dstName := rootPath + "/addpiece.data"
-				sorName := rootPath + "/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
+				sorName := rootPath + "/unsealed/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
 				if _, err = storage_util.CopyFile(dstName, sorName); err != nil {
 					log.Errorf("copy addpiece err: %s", err.Error())
 				}
