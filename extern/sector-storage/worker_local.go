@@ -231,6 +231,7 @@ var returnFunc = map[ReturnType]func(context.Context, storiface.CallID, storifac
 }
 
 func (l *LocalWorker) asyncCall(ctx context.Context, sector storage.SectorRef, rt ReturnType, work func(ctx context.Context, ci storiface.CallID) (interface{}, error)) (storiface.CallID, error) {
+
 	ci := storiface.CallID{
 		Sector: sector.ID,
 		ID:     uuid.New(),
