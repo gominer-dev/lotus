@@ -176,6 +176,16 @@ var runCmd = &cli.Command{
 			Name:  "hostname",
 			Usage: "hostname must setting",
 		},
+		&cli.StringFlag{
+			Name:  "mem",
+			Usage: "Manually set the memory size",
+			Value: "1TiB",
+		},
+		&cli.IntFlag{
+			Name:  "cpus",
+			Usage: "Manually set the number of CPU cores",
+			Value: 32,
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -404,6 +414,8 @@ var runCmd = &cli.Command{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
 				Hostname:  cctx.String("hostname"),
+				MemSize:   cctx.String("mem"),
+				CPUs:      cctx.Int("cpus"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,

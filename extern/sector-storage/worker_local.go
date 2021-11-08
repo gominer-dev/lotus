@@ -3,9 +3,9 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	"github.com/docker/go-units"
 	"io"
 	"reflect"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +39,8 @@ type WorkerConfig struct {
 	IgnoreResourceFiltering bool
 
 	Hostname string
+	MemSize  string
+	CPUs     int
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -56,6 +58,8 @@ type LocalWorker struct {
 	ignoreResources bool
 	canSeal         bool
 	hostname        string
+	memSize         string
+	cpus            int
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -80,6 +84,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		ret:        ret,
 
 		canSeal: true,
+		memSize: wcfg.MemSize,
+		cpus:    wcfg.CPUs,
 
 		ct: &workerCallTracker{
 			st: cst,
@@ -538,15 +544,20 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		memSwap = 0
 	}
 
+	memTotal, err := units.RAMInBytes(l.memSize)
+	if err != nil {
+		panic(err)
+	}
+
 	return storiface.WorkerInfo{
 		Hostname:        l.hostname,
 		IgnoreResources: l.ignoreResources,
 		CanSeal:         l.canSeal,
 		Resources: storiface.WorkerResources{
-			MemPhysical: mem.Total,
+			MemPhysical: uint64(memTotal),
 			MemSwap:     memSwap,
-			MemReserved: mem.VirtualUsed + mem.Total - mem.Available, // TODO: sub this process
-			CPUs:        uint64(runtime.NumCPU()),
+			MemReserved: 0, // TODO: sub this process
+			CPUs:        uint64(l.cpus),
 			GPUs:        gpus,
 		},
 	}, nil
