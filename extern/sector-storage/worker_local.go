@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"os"
 	"reflect"
 	"runtime"
 	"sync"
@@ -38,6 +37,8 @@ type WorkerConfig struct {
 	// worker regardless of its currently available resources. Used in testing
 	// with the local worker.
 	IgnoreResourceFiltering bool
+
+	Hostname string
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -54,6 +55,7 @@ type LocalWorker struct {
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
 	canSeal         bool
+	hostname        string
 
 	ct          *workerCallTracker
 	acceptTasks map[sealtasks.TaskType]struct{}
@@ -511,9 +513,9 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 }
 
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
-	hostname, err := os.Hostname() // TODO: allow overriding from config
-	if err != nil {
-		panic(err)
+
+	if l.hostname == "" {
+		panic("hostname is empty")
 	}
 
 	gpus, err := ffi.GetGPUDevices()
@@ -537,7 +539,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname:        hostname,
+		Hostname:        l.hostname,
 		IgnoreResources: l.ignoreResources,
 		CanSeal:         l.canSeal,
 		Resources: storiface.WorkerResources{
