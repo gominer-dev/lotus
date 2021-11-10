@@ -566,9 +566,13 @@ func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector s
 		return false, err
 	}
 
-	destMetaPath := repo.LocalPath + "/unsealed/.template/piece.meta"
+	destMetaPath := repo.LocalPath + "/unsealed/.template/"
 
-	if err = ioutil.WriteFile(destMetaPath, cid.Bytes(), 0644); err != nil {
+	if err := os.MkdirAll(destMetaPath, 0644); err != nil {
+		return false, err
+	}
+
+	if err = ioutil.WriteFile(destMetaPath+"piece.meta", cid.Bytes(), 0644); err != nil {
 		return false, err
 	}
 
