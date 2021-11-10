@@ -566,7 +566,7 @@ func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector s
 		return false, err
 	}
 
-	destMetaPath := repo.LocalPath + "/unsealed/.template/"
+	destMetaPath := repo.LocalPath + "/.template/"
 
 	if err := os.MkdirAll(destMetaPath, 0644); err != nil {
 		return false, err
@@ -577,7 +577,7 @@ func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector s
 	}
 
 	sourcePath := repo.LocalPath + "/unsealed/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
-	destDataPath := repo.LocalPath + "/unsealed/.template/piece.data"
+	destDataPath := repo.LocalPath + "/.template/piece.data"
 
 	buf := make([]byte, 1<<30)
 	sf, err := os.Open(sourcePath)
@@ -616,8 +616,8 @@ func (st *Local) AddPieceTemplateIsEmpty(ctx context.Context) bool {
 		return false
 	}
 
-	data := repo.LocalPath + "/unsealed/.template/piece.data"
-	c := repo.LocalPath + "/unsealed/.template/piece.meta"
+	data := repo.LocalPath + "/.template/piece.data"
+	c := repo.LocalPath + "/.template/piece.meta"
 
 	if isExist(data) && isExist(c) {
 		return false
@@ -649,7 +649,7 @@ func (st *Local) AddPieceForTemplate(ctx context.Context, sector storage.SectorR
 		return pieceInfo, err
 	}
 
-	sourcePath := repo.LocalPath + "/unsealed/.template/piece.data"
+	sourcePath := repo.LocalPath + "/.template/piece.data"
 	destPath := repo.LocalPath + "/unsealed/s-t0" + sector.ID.Miner.String() + "-" + sector.ID.Number.String()
 
 	buf := make([]byte, 1<<30)
@@ -699,7 +699,7 @@ func (st *Local) GetTemplateCID(ctx context.Context) (cid.Cid, error) {
 	if err != nil {
 		return cid.Undef, err
 	}
-	meta, err := ioutil.ReadFile(repo.LocalPath + "/unsealed/.template/piece.meta")
+	meta, err := ioutil.ReadFile(repo.LocalPath + "/.template/piece.meta")
 	if err != nil {
 		return cid.Undef, err
 	}
