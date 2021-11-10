@@ -616,10 +616,10 @@ func (st *Local) AddPieceTemplateIsEmpty(ctx context.Context) bool {
 	c := repo.LocalPath + "/unsealed/.template/piece.meta"
 
 	if isExist(data) && isExist(c) {
-		return true
+		return false
 	}
 
-	return false
+	return true
 }
 
 func isExist(path string) bool {
