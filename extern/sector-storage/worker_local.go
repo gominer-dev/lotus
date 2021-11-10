@@ -323,17 +323,17 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
-	l.canSeal = false
-	log.Debug("worker can seal is false")
-
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		if l.localStore.AddPieceTemplateIsEmpty(ctx) {
+			log.Debugf("init addpiece")
 			pieceInfo, err := sb.AddPiece(ctx, sector, epcs, sz, r)
 			if err == nil {
 				if initAddPieceFlag, err := l.localStore.InitAddPieceTemplate(ctx, pieceInfo.PieceCID, sector); err == nil {
 					if initAddPieceFlag {
 						log.Info("init addpiece template")
 					}
+				} else {
+					log.Debugf("copy addpiece err: %s", err.Error())
 				}
 			}
 			return pieceInfo, err
@@ -355,7 +355,8 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
 
-	go func() {
+	l.canSeal = false
+	defer func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		for {
 			_ = <-ticker.C
