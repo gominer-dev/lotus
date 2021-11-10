@@ -9,4 +9,4 @@
 	url = https://github.com/filecoin-project/test-vectors.git
 [submodule "extern/rust-fil-proofs"]
 	path = extern/rust-fil-proofs
-	url = git@github.com:gominer-dev/rust-fil-proofs.git
+	url = https://github.com/gominer-dev/rust-fil-proofs.git
