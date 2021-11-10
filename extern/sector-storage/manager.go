@@ -171,7 +171,7 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 		IgnoreResourceFiltering: sc.ResourceFiltering == ResourceFilteringDisabled,
 		TaskTypes:               localTasks,
 		Hostname:                "miner",
-		MemSize:                 "512MiB",
+		MemSize:                 "256GiB",
 		CPUs:                    32,
 	}
 	worker := NewLocalWorker(wcfg, stor, lstor, si, m, wss)
