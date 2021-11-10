@@ -301,6 +301,7 @@ func (sh *scheduler) runSched() {
 				req.done()
 			}
 
+			log.Debug("try sched")
 			sh.trySched()
 		}
 
