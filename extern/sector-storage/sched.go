@@ -395,13 +395,24 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
+				remoteInfo, err := worker.workerRpc.Info(context.TODO())
+				if err != nil {
+					log.Warnf("remote worker (%s) got info err: %s", remoteInfo.Hostname, err.Error())
+					continue
+				}
+
+				if !remoteInfo.CanSeal {
+					log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
+					continue
+				}
+
 				// TODO: allow bigger windows
 				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
 					continue
 				}
 
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
-				ok, err := task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
+				ok, err = task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
 				cancel()
 				if err != nil {
 					log.Errorf("trySched(1) req.sel.Ok error: %+v", err)
@@ -464,17 +475,6 @@ func (sh *scheduler) trySched() {
 		for _, wnd := range acceptableWindows[task.indexHeap] {
 			wid := sh.openWindows[wnd].worker
 			info := sh.workers[wid].info
-
-			remoteInfo, err := sh.workers[wid].workerRpc.Info(context.TODO())
-			if err != nil {
-				log.Warnf("remote worker (%s) got info err: %s", info.Hostname, err.Error())
-				continue
-			}
-
-			if !remoteInfo.CanSeal {
-				log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
-				continue
-			}
 
 			log.Debugf("SCHED try assign sqi:%d sector %d to window %d", sqi, task.sector.ID.Number, wnd)
 
