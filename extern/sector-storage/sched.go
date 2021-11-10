@@ -402,8 +402,10 @@ func (sh *scheduler) trySched() {
 				}
 
 				if !remoteInfo.CanSeal {
-					log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
-					continue
+					if task.taskType == sealtasks.TTPreCommit1 || task.taskType == sealtasks.TTAddPiece {
+						log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
+						continue
+					}
 				}
 
 				// TODO: allow bigger windows
