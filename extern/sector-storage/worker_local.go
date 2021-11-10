@@ -83,9 +83,10 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		sindex:     sindex,
 		ret:        ret,
 
-		canSeal: true,
-		memSize: wcfg.MemSize,
-		cpus:    wcfg.CPUs,
+		canSeal:  true,
+		memSize:  wcfg.MemSize,
+		cpus:     wcfg.CPUs,
+		hostname: wcfg.Hostname,
 
 		ct: &workerCallTracker{
 			st: cst,
