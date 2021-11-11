@@ -359,14 +359,11 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
 
 	l.canSeal = false
-	defer func() {
+	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
-		for {
-			_ = <-ticker.C
-			log.Debug("worker can seal is true")
-			l.canSeal = true
-			break
-		}
+		<-ticker.C
+		log.Debug("worker can seal is true")
+		l.canSeal = true
 	}()
 
 	return l.asyncCall(ctx, sector, SealPreCommit1, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
