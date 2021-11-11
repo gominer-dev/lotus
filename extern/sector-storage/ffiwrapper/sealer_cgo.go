@@ -42,8 +42,9 @@ func New(sectors SectorProvider) (*Sealer, error) {
 
 func (sb *Sealer) NewSector(ctx context.Context, sector storage.SectorRef) error {
 	// TODO: Allocate the sector here instead of in addpiece
-
-	return nil
+	_, done, err := sb.sectors.AcquireSector(ctx, sector, 0, storiface.FTUnsealed, storiface.PathSealing)
+	defer done()
+	return err
 }
 
 func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, pieceSize abi.UnpaddedPieceSize, file storage.Data) (abi.PieceInfo, error) {

@@ -338,6 +338,9 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 			}
 			return pieceInfo, err
 		}
+		if err := l.NewSector(ctx, sector); err != nil {
+			log.Debugw("new sector err: ", err.Error())
+		}
 		return l.localStore.AddPieceForTemplate(ctx, sector)
 	})
 }
