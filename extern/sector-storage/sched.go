@@ -220,6 +220,19 @@ type SchedDiagInfo struct {
 	OpenWindows []string
 }
 
+func (sh *scheduler) getWorkerInfo() {
+	for _, handle := range sh.workers {
+		if info, err := handle.workerRpc.Info(context.TODO()); err != nil {
+			log.Debugf("worker (%s) connect failed", handle.info.Hostname)
+		} else {
+			if handle.info.CanSeal != info.CanSeal {
+				sh.workerChange <- struct{}{}
+			}
+		}
+	}
+	time.AfterFunc(3*time.Minute, sh.getWorkerInfo)
+}
+
 func (sh *scheduler) runSched() {
 	defer close(sh.closed)
 
@@ -253,6 +266,9 @@ func (sh *scheduler) runSched() {
 			initialised = true
 			iw = nil
 			doSched = true
+			go func() {
+				sh.getWorkerInfo()
+			}()
 		case <-sh.closing:
 			sh.schedClose()
 			return
