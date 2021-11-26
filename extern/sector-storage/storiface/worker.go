@@ -23,8 +23,8 @@ type WorkerInfo struct {
 	// task assignment. Only supported on local workers. Used for testing.
 	// Default should be false (zero value, i.e. resources taken into account).
 	IgnoreResources bool
-	CanSeal         bool
-	Resources       WorkerResources
+
+	Resources WorkerResources
 }
 
 type WorkerResources struct {

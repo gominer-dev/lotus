@@ -56,7 +56,6 @@ type LocalWorker struct {
 
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
-	canSeal         bool
 	hostname        string
 	memSize         string
 	cpus            int
@@ -83,7 +82,6 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		sindex:     sindex,
 		ret:        ret,
 
-		canSeal:  true,
 		memSize:  wcfg.MemSize,
 		cpus:     wcfg.CPUs,
 		hostname: wcfg.Hostname,
@@ -358,14 +356,6 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
 
-	l.canSeal = false
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		<-ticker.C
-		log.Debug("worker can seal is true")
-		l.canSeal = true
-	}()
-
 	return l.asyncCall(ctx, sector, SealPreCommit1, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 
 		{
@@ -555,7 +545,6 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	return storiface.WorkerInfo{
 		Hostname:        l.hostname,
 		IgnoreResources: l.ignoreResources,
-		CanSeal:         l.canSeal,
 		Resources: storiface.WorkerResources{
 			MemPhysical: uint64(memTotal),
 			MemSwap:     memSwap,

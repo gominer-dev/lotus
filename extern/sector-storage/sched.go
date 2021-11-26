@@ -220,19 +220,6 @@ type SchedDiagInfo struct {
 	OpenWindows []string
 }
 
-func (sh *scheduler) getWorkerInfo() {
-	for _, handle := range sh.workers {
-		if info, err := handle.workerRpc.Info(context.TODO()); err != nil {
-			log.Debugf("worker (%s) connect failed", handle.info.Hostname)
-		} else {
-			if handle.info.CanSeal != info.CanSeal {
-				sh.workerChange <- struct{}{}
-			}
-		}
-	}
-	time.AfterFunc(3*time.Minute, sh.getWorkerInfo)
-}
-
 func (sh *scheduler) runSched() {
 	defer close(sh.closed)
 
@@ -266,9 +253,6 @@ func (sh *scheduler) runSched() {
 			initialised = true
 			iw = nil
 			doSched = true
-			go func() {
-				sh.getWorkerInfo()
-			}()
 		case <-sh.closing:
 			sh.schedClose()
 			return
@@ -411,26 +395,13 @@ func (sh *scheduler) trySched() {
 					continue
 				}
 
-				remoteInfo, err := worker.workerRpc.Info(context.TODO())
-				if err != nil {
-					log.Warnf("remote worker (%s) got info err: %s", remoteInfo.Hostname, err.Error())
-					continue
-				}
-
-				if !remoteInfo.CanSeal {
-					if task.taskType == sealtasks.TTPreCommit1 || task.taskType == sealtasks.TTAddPiece {
-						log.Debugf("remote worker (%s) busy", remoteInfo.Hostname)
-						continue
-					}
-				}
-
 				// TODO: allow bigger windows
 				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info) {
 					continue
 				}
 
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
-				ok, err = task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
+				ok, err := task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
 				cancel()
 				if err != nil {
 					log.Errorf("trySched(1) req.sel.Ok error: %+v", err)
