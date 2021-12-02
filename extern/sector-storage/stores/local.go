@@ -556,7 +556,12 @@ func (st *Local) FirstLocal(ctx context.Context) (StoragePath, error) {
 		if len(sps) == 0 {
 			return StoragePath{}, xerrors.Errorf("worker missing local storage")
 		}
-		return sps[0], nil
+		for _, sp := range sps {
+			if sp.CanSeal {
+				return sp, nil
+			}
+		}
+		return StoragePath{}, xerrors.Errorf("worker missing local storage")
 	}
 }
 
@@ -568,7 +573,7 @@ func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector s
 
 	destMetaPath := repo.LocalPath + "/.template/"
 
-	if err := os.MkdirAll(destMetaPath, 0644); err != nil {
+	if err := os.MkdirAll(destMetaPath, 0755); err != nil {
 		return false, err
 	}
 
