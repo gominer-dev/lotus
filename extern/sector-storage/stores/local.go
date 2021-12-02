@@ -577,7 +577,7 @@ func (st *Local) InitAddPieceTemplate(ctx context.Context, cid cid.Cid, sector s
 		return false, err
 	}
 
-	if err = ioutil.WriteFile(destMetaPath+"piece.meta", cid.Bytes(), 0644); err != nil {
+	if err = ioutil.WriteFile(destMetaPath+"piece.meta", cid.Bytes(), 0664); err != nil {
 		return false, err
 	}
 
